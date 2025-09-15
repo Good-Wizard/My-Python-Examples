@@ -178,6 +178,7 @@ def login(data):
 
 def handle_cmds(ftp, host):
     """حلقه دستورات اصلی"""
+    print("[-] Use -help To See Commands")
     while True:
         try:
             cwd = ftp.pwd()
