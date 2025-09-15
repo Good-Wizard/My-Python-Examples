@@ -6,37 +6,56 @@ import os
 import sys
 import json
 from colorama import init, Fore, Style
-import tqdm
+from tqdm import tqdm
 import logging
 from logging.handlers import RotatingFileHandler
 import os
+import ssl
 
 
 # تنظیمات پایه لاگ
 LOG_FILE = "ftp_client.log"
 logging.basicConfig(
     filename=LOG_FILE,
-    filemode='a',
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    filemode="a",
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
 )
 # جلوگیری از پر شدن دیسک
 handler = RotatingFileHandler(LOG_FILE, maxBytes=1_000_000, backupCount=5)
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 handler.setFormatter(formatter)
 logger = logging.getLogger()
 logger.addHandler(handler)
 
 
-try:
-    import readline  # Linux/macOS
-except ImportError:
-    import pyreadline as readline  # Windows
+if platform.system().lower() != "windows":
+    try:
+        import readline
+
+        # history & autocomplete setup
+    except ImportError:
+        pass
 
 init(autoreset=True)
 
-COMMANDS = ["help", "ls", "pwd", "cd", "clear", "get", "put", "delete", "mkdir", "rmdir", "rename", "quit", "exit"]
+COMMANDS = [
+    "help",
+    "ls",
+    "pwd",
+    "cd",
+    "clear",
+    "get",
+    "put",
+    "delete",
+    "mkdir",
+    "rmdir",
+    "rename",
+    "quit",
+    "exit",
+]
 PROFILE_FILE = ".ftp_profiles.json"
+
 
 def completer(text, state):
     options = [cmd for cmd in COMMANDS if cmd.startswith(text)]
@@ -44,11 +63,13 @@ def completer(text, state):
         return options[state]
     return None
 
+
 try:
     readline.set_completer(completer)
     readline.parse_and_bind("tab: complete")
 except Exception:
     pass
+
 
 def clear_screen():
     """پاک کردن صفحه ترمینال"""
@@ -78,13 +99,16 @@ def load_profile():
 
 def get_login_data(func):
     """دکوراتور برای گرفتن اطلاعات ورود از کاربر"""
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         clear_screen()
 
         profile = load_profile()
         if profile:
-            print(f"Last profile: host={profile['host']} user={profile['username']} TLS={profile['tls']}")
+            print(
+                f"Last profile: host={profile['host']} user={profile['username']} TLS={profile['tls']}"
+            )
             use_last = input("Use last profile? (y/N): ").strip().lower()
             if use_last == "y":
                 username = profile["username"]
@@ -101,57 +125,57 @@ def get_login_data(func):
         use_tls = tls_input == "y"
 
         if not username or not password or not host:
-            print("\n[!] همه فیلدها الزامی هستند. دوباره تلاش کنید.")
+            print("\n[!] All fields are required. Please try again.")
             sleep(1)
             return wrapper(*args, **kwargs)
 
         save_profile(host, username, use_tls)
         data = [username, password, host, use_tls]
         return func(data, *args, **kwargs)
-    return wrapper
 
+    return wrapper
 
 @get_login_data
 def login(data):
-    """اتصال به FTP/FTPS سرور"""
-    print("=" * 20, "\nConnecting...!", sep="")
-    ftp = None
-    try:
-        use_tls = data[3]
-        ftp_class = FTP_TLS if use_tls else FTP
+    host, username, password = data[2], data[0], data[1]
+    print("="*20, "\nConnecting...!", sep="")
 
-        ftp = ftp_class(timeout=10)
-        ftp.connect(host=data[2], port=21)
-        ftp.login(user=data[0], passwd=data[1])
+    while True:
+        ftp = None
+        try:
+            ftp = FTP(timeout=10)
+            ftp.connect(host, 21)
+            ftp.login(user=username, passwd=password)
+            print("[+] Connected successfully (FTP)")
 
-        if use_tls:
-            ftp.prot_p()  # Protect data channel with TLS
-            print("[+] Secure FTPS connection established")
+            print(ftp.getwelcome())
+            sleep(1)
+            handle_cmds(ftp, host)
+            break
 
-        print("\n[+] Connected successfully!")
-        print(ftp.getwelcome())
-        sleep(1)
-
-        handle_cmds(ftp, data[2])  # حلقه دستورات
-
-    except error_perm as e:
-        print(f"\n[!] Permission error (username/password اشتباه؟): {e}")
-    except (ConnectionRefusedError, TimeoutError) as e:
-        print(f"\n[!] اتصال برقرار نشد: {e}")
-        retry = input("Retry? (y/N): ").strip().lower()
-        if retry == "y":
-            return login(data)
-    except all_errors as e:
-        print(f"\n[!] خطای عمومی FTP: {e}")
-    except Exception as e:
-        print(f"\n[!] خطای ناشناخته: {e}")
-    finally:
-        if ftp is not None:
-            try:
-                ftp.quit()
-                print("\n[-] Connection closed.")
-            except Exception:
-                ftp.close()
+        except error_perm as e:
+            print(f"[!] Permission error: {e}")
+            break
+        except (ConnectionRefusedError, TimeoutError) as e:
+            print(f"[!] Connection failed: {e}")
+            retry = input("Retry? (y/N): ").strip().lower()
+            if retry != "y":
+                break
+        except all_errors as e:
+            print(f"[!] FTP error: {e}")
+            break
+        except Exception as e:
+            print(f"[!] Unknown error: {e}")
+            break
+        finally:
+            if ftp is not None:
+                try:
+                    ftp.quit()
+                except Exception:
+                    try:
+                        ftp.close()
+                    except Exception:
+                        pass
 
 
 def handle_cmds(ftp, host):
@@ -173,7 +197,8 @@ def handle_cmds(ftp, host):
                 break
 
             elif command == "help":
-                print("""
+                print(
+                    """
 Available commands:
   ls                   - List files in current directory
   cd <dir>             - Change directory
@@ -187,7 +212,8 @@ Available commands:
   rename <old> <new>   - Rename a file or directory
   help                 - Show this help message
   quit / exit          - Disconnect and quit
-                """)
+                """
+                )
 
             elif command == "pwd":
                 print(Fore.GREEN + ftp.pwd())
@@ -213,12 +239,19 @@ Available commands:
                     try:
                         logging.info(f"Downloaded '{remote_file}' -> '{local_file}'")
                         size = ftp.size(remote_file)
-                        with open(local_file, "wb") as f, tqdm(total=size, unit='B', unit_scale=True, desc=remote_file) as bar:
+                        with open(local_file, "wb") as f, tqdm(
+                            total=size, unit="B", unit_scale=True, desc=remote_file
+                        ) as bar:
+
                             def callback(data):
                                 f.write(data)
                                 bar.update(len(data))
+
                             ftp.retrbinary(f"RETR {remote_file}", callback)
-                        print(Fore.GREEN + f"[+] Downloaded '{remote_file}' -> '{local_file}'")
+                        print(
+                            Fore.GREEN
+                            + f"[+] Downloaded '{remote_file}' -> '{local_file}'"
+                        )
                     except all_errors as e:
                         print(Fore.RED + f"[!] FTP error: {e}")
                         logging.error(f"Failed to download '{remote_file}': {e}")
@@ -228,20 +261,28 @@ Available commands:
                     print("[!] Usage: put <local> [remote]")
                 else:
                     local_file = args[0]
-                    remote_file = args[1] if len(args) > 1 else os.path.basename(local_file)
+                    remote_file = (
+                        args[1] if len(args) > 1 else os.path.basename(local_file)
+                    )
                     if not os.path.exists(local_file):
                         print(Fore.RED + f"[!] Local file not found: {local_file}")
                     else:
                         try:
                             size = os.path.getsize(local_file)
-                            with open(local_file, "rb") as f, tqdm(total=size, unit='B', unit_scale=True, desc=local_file) as bar:
+                            with open(local_file, "rb") as f, tqdm(
+                                total=size, unit="B", unit_scale=True, desc=local_file
+                            ) as bar:
+
                                 def callback(data):
                                     bar.update(len(data))
+
                                 ftp.storbinary(f"STOR {remote_file}", f, 1024, callback)
-                            print(Fore.GREEN + f"[+] Uploaded '{local_file}' -> '{remote_file}'")
+                            print(
+                                Fore.GREEN
+                                + f"[+] Uploaded '{local_file}' -> '{remote_file}'"
+                            )
                         except all_errors as e:
                             print(Fore.RED + f"[!] FTP error: {e}")
-
 
             elif command == "delete":
                 if len(args) != 1:
@@ -284,7 +325,9 @@ Available commands:
                         print(f"[!] FTP error: {e}")
 
             else:
-                print(f"[!] Unknown command: {command}. Type 'help' for available commands.")
+                print(
+                    f"[!] Unknown command: {command}. Type 'help' for available commands."
+                )
 
         except KeyboardInterrupt:
             print(Fore.YELLOW + "\n[!] Interrupted. Type 'quit' to exit.")
@@ -297,5 +340,5 @@ if __name__ == "__main__":
     try:
         login()
     except KeyboardInterrupt:
-        print("\n[!] برنامه متوقف شد.")
+        print("\n[!] The program was stopped.")
         sys.exit(0)
