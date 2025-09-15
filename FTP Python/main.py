@@ -7,6 +7,26 @@ import sys
 import json
 from colorama import init, Fore, Style
 import tqdm
+import logging
+from logging.handlers import RotatingFileHandler
+import os
+
+
+# تنظیمات پایه لاگ
+LOG_FILE = "ftp_client.log"
+logging.basicConfig(
+    filename=LOG_FILE,
+    filemode='a',
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+# جلوگیری از پر شدن دیسک
+handler = RotatingFileHandler(LOG_FILE, maxBytes=1_000_000, backupCount=5)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger = logging.getLogger()
+logger.addHandler(handler)
+
 
 try:
     import readline  # Linux/macOS
@@ -191,6 +211,7 @@ Available commands:
                     remote_file = args[0]
                     local_file = args[1] if len(args) > 1 else remote_file
                     try:
+                        logging.info(f"Downloaded '{remote_file}' -> '{local_file}'")
                         size = ftp.size(remote_file)
                         with open(local_file, "wb") as f, tqdm(total=size, unit='B', unit_scale=True, desc=remote_file) as bar:
                             def callback(data):
@@ -200,6 +221,7 @@ Available commands:
                         print(Fore.GREEN + f"[+] Downloaded '{remote_file}' -> '{local_file}'")
                     except all_errors as e:
                         print(Fore.RED + f"[!] FTP error: {e}")
+                        logging.error(f"Failed to download '{remote_file}': {e}")
 
             elif command == "put":
                 if len(args) < 1:
