@@ -5,10 +5,28 @@ import platform
 import os
 import sys
 import json
+from colorama import init, Fore, Style
+try:
+    import readline  # Linux/macOS
+except ImportError:
+    import pyreadline as readline  # Windows
 
+init(autoreset=True)
 
+COMMANDS = ["help", "ls", "pwd", "cd", "clear", "get", "put", "delete", "mkdir", "rmdir", "rename", "quit", "exit"]
 PROFILE_FILE = ".ftp_profiles.json"
 
+def completer(text, state):
+    options = [cmd for cmd in COMMANDS if cmd.startswith(text)]
+    if state < len(options):
+        return options[state]
+    return None
+
+try:
+    readline.set_completer(completer)
+    readline.parse_and_bind("tab: complete")
+except Exception:
+    pass
 
 def clear_screen():
     """پاک کردن صفحه ترمینال"""
@@ -119,8 +137,8 @@ def handle_cmds(ftp, host):
     while True:
         try:
             cwd = ftp.pwd()
-            cmd = input(f"ftp@{host}:{cwd}> ").strip()
-
+            prompt = Fore.CYAN + f"ftp@{host}:{cwd}> " + Style.RESET_ALL
+            cmd = input(prompt).strip()
             if not cmd:
                 continue
 
@@ -149,11 +167,11 @@ Available commands:
   quit / exit          - Disconnect and quit
                 """)
 
-            elif command == "ls":
-                ftp.dir()
-
             elif command == "pwd":
-                print(ftp.pwd())
+                print(Fore.GREEN + ftp.pwd())
+            elif command == "ls":
+                print(Fore.YELLOW + "[Listing files...]")
+                ftp.dir()
 
             elif command == "cd":
                 if len(args) != 1:
@@ -237,9 +255,9 @@ Available commands:
                 print(f"[!] Unknown command: {command}. Type 'help' for available commands.")
 
         except KeyboardInterrupt:
-            print("\n[!] Interrupted. Type 'quit' to exit.")
+            print(Fore.YELLOW + "\n[!] Interrupted. Type 'quit' to exit.")
         except EOFError:
-            print("\n[-] End of input detected. Exiting...")
+            print(Fore.YELLOW + "\n[-] End of input detected. Exiting...")
             break
 
 
