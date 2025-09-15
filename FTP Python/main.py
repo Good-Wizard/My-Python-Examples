@@ -12,10 +12,7 @@ def clear_screen():
 
 
 def get_login_data(func):
-    """
-    دکوراتور برای گرفتن اطلاعات ورود از کاربر
-    (username, password, host)
-    """
+    """دکوراتور برای گرفتن اطلاعات ورود از کاربر"""
     @wraps(func)
     def wrapper(*args, **kwargs):
         clear_screen()
@@ -39,14 +36,14 @@ def login(data):
     print("=" * 20, "\nConnecting...!", sep="")
     ftp = None
     try:
-        ftp = FTP(timeout=10)  # تایم‌اوت اضافه شد
+        ftp = FTP(timeout=10)
         ftp.connect(host=data[2], port=21)
         ftp.login(user=data[0], passwd=data[1])
         print("\n[+] Connected successfully!")
         print(ftp.getwelcome())
         sleep(1)
-        # در فاز بعد اینجا می‌ره به handle_cmds
-        # handle_cmds(ftp)
+
+        handle_cmds(ftp, data[2])  # رفتن به حلقه دستورات
 
     except error_perm as e:
         print(f"\n[!] Permission error (username/password اشتباه؟): {e}")
@@ -63,6 +60,65 @@ def login(data):
                 print("\n[-] Connection closed.")
             except Exception:
                 ftp.close()
+
+
+def handle_cmds(ftp, host):
+    """حلقه دستورات اصلی"""
+    while True:
+        try:
+            cwd = ftp.pwd()
+            cmd = input(f"ftp@{host}:{cwd}> ").strip()
+
+            if not cmd:
+                continue
+
+            parts = cmd.split()
+            command = parts[0].lower()
+            args = parts[1:]
+
+            if command in ["quit", "exit"]:
+                print("[-] Closing connection...")
+                break
+
+            elif command == "help":
+                print("""
+Available commands:
+  ls              - List files in current directory
+  cd <dir>        - Change directory
+  pwd             - Show current directory
+  clear           - Clear the screen
+  help            - Show this help message
+  quit / exit     - Disconnect and quit
+                """)
+
+            elif command == "ls":
+                ftp.dir()
+
+            elif command == "pwd":
+                print(ftp.pwd())
+
+            elif command == "cd":
+                if len(args) != 1:
+                    print("[!] Usage: cd <directory>")
+                else:
+                    try:
+                        ftp.cwd(args[0])
+                    except error_perm as e:
+                        print(f"[!] Permission error: {e}")
+                    except all_errors as e:
+                        print(f"[!] FTP error: {e}")
+
+            elif command == "clear":
+                clear_screen()
+
+            else:
+                print(f"[!] Unknown command: {command}. Type 'help' for available commands.")
+
+        except KeyboardInterrupt:
+            print("\n[!] Interrupted. Type 'quit' to exit.")
+        except EOFError:
+            print("\n[-] End of input detected. Exiting...")
+            break
 
 
 if __name__ == "__main__":
