@@ -3,35 +3,58 @@ import string
 import time
 import sys
 import pyperclip
-from colorama import init, Fore, Style
+from colorama import init, Fore
+from time import sleep
+import os
 
 # Initialize colorama
 init(autoreset=True)
 
-# کاراکترهای مختلف
+# کاراکترها
 LOWERCASE = string.ascii_lowercase
 UPPERCASE = string.ascii_uppercase
 DIGITS = string.digits
 SYMBOLS = "!@#$%^&*()_+-=[]{}|;:,.<>?/"
 
-def animate_text(text, delay=0.03):
-    """انیمیشن تایپ متن"""
+def clear_screen():
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+def animate_text(text, delay=0.03, border=False):
+    if border:
+        line = "+" + "-" * (len(text) + 2) + "+"
+        print(Fore.MAGENTA + line)
+        sys.stdout.write(Fore.MAGENTA + "| ")
     for char in text:
         sys.stdout.write(char)
         sys.stdout.flush()
         time.sleep(delay)
-    print()
+    if border:
+        print(Fore.MAGENTA + " |")
+        print(Fore.MAGENTA + line)
+    else:
+        print()
 
-def show_progress_bar(progress, total, length=30):
-    """نمایش Progress Bar رنگی"""
-    filled_length = int(length * progress // total)
-    bar = Fore.GREEN + '█' * filled_length + Fore.RED + '█' * (length - filled_length)
-    percent = (progress / total) * 100
-    sys.stdout.write(f"\rProgress: |{bar}| {percent:.1f}%")
-    sys.stdout.flush()
+def generate_password(length=12, use_upper=True, use_digits=True, use_symbols=True):
+    char_pool = LOWERCASE
+    password = []
+
+    # همیشه با یک کاراکتر شروع شود
+    start_char_pool = LOWERCASE
+    if use_upper: start_char_pool += UPPERCASE
+    if use_digits: start_char_pool += DIGITS
+    if use_symbols: start_char_pool += SYMBOLS
+    password.append(random.choice(start_char_pool))
+    
+    if use_upper: char_pool += UPPERCASE
+    if use_digits: char_pool += DIGITS
+    if use_symbols: char_pool += SYMBOLS
+
+    while len(password) < length:
+        password.append(random.choice(char_pool))
+    random.shuffle(password[1:])  # بقیه کاراکترها مخلوط شوند
+    return ''.join(password)
 
 def password_strength(password):
-    """محاسبه و نمایش قدرت پسورد به شکل Progress Bar"""
     score = 0
     if any(c.islower() for c in password): score += 1
     if any(c.isupper() for c in password): score += 1
@@ -39,97 +62,73 @@ def password_strength(password):
     if any(c in SYMBOLS for c in password): score += 1
     if len(password) >= 12: score += 1
 
-    # نوار قدرت بصری
     bar_length = 20
     filled = int(bar_length * score / 5)
-    bar = Fore.GREEN + '█' * filled + Fore.RED + '█' * (bar_length - filled)
-    if score <= 2:
-        level = Fore.RED + "Weak"
-    elif score == 3:
-        level = Fore.YELLOW + "Medium"
-    else:
-        level = Fore.GREEN + "Strong"
+    bar = Fore.GREEN + '|' * filled + Fore.RED + '|' * (bar_length - filled)
+
+    if score <= 2: level = Fore.RED + "Weak"
+    elif score == 3: level = Fore.YELLOW + "Medium"
+    else: level = Fore.GREEN + "Strong"
+    
     return f"|{bar}| {level}"
 
-def generate_password_custom(length, min_upper, min_lower, min_digits, min_symbols):
-    """تولید پسورد با قوانین سخت‌گیرانه"""
-    if length < (min_upper + min_lower + min_digits + min_symbols):
-        raise ValueError("طول پسورد کمتر از مجموع حداقل‌های تعیین‌شده است!")
-
-    password = []
-
-    # اضافه کردن حداقل تعداد کاراکترهای هر نوع
-    password += random.choices(UPPERCASE, k=min_upper)
-    password += random.choices(LOWERCASE, k=min_lower)
-    password += random.choices(DIGITS, k=min_digits)
-    password += random.choices(SYMBOLS, k=min_symbols)
-
-    # پر کردن باقی طول پسورد
-    remaining_length = length - len(password)
-    char_pool = ''
-    if min_upper > 0: char_pool += UPPERCASE
-    if min_lower > 0: char_pool += LOWERCASE
-    if min_digits > 0: char_pool += DIGITS
-    if min_symbols > 0: char_pool += SYMBOLS
-    if not char_pool: char_pool = LOWERCASE + UPPERCASE + DIGITS + SYMBOLS
-
-    password += random.choices(char_pool, k=remaining_length)
-    random.shuffle(password)
-    return ''.join(password)
-
-def main():
-    animate_text("✨ Welcome to the Ultimate Professional Password Generator! ✨\n")
-
-    try:
-        length = int(input("Enter password length (8-20 recommended): "))
-        min_upper = int(input("Minimum uppercase letters: "))
-        min_lower = int(input("Minimum lowercase letters: "))
-        min_digits = int(input("Minimum digits: "))
-        min_symbols = int(input("Minimum symbols: "))
-        count = int(input("How many passwords to generate?: "))
-        save_file = input("Save passwords to file? (y/n): ").lower() == 'y'
-        if save_file:
-            filename = input("Enter filename (default: passwords.txt): ")
-            if not filename:
-                filename = "passwords.txt"
-    except ValueError:
-        print(Fore.RED + "Invalid input! Please enter numbers correctly.")
-        return
-
-    animate_text("\nGenerating passwords", 0.05)
-    for _ in range(5):  # انیمیشن تولید
-        sys.stdout.write(".")
+def generating_animation():
+    print("\nGenerating passwords", end="")
+    for _ in range(6):
+        sys.stdout.write(Fore.CYAN + ".")
         sys.stdout.flush()
         time.sleep(0.3)
     print("\n")
 
+def main():
+    clear_screen()
+    # ولکام جذاب با border
+    animate_text("WELCOME TO THE ULTIMATE PASSWORD GENERATOR", delay=0.02, border=True)
+
+    try:
+        length = int(input("[ $ ] Enter password length (8-64 recommended) : "))
+        use_upper = input("[ $ ] Include uppercase letters? (y/n) : ").lower() == 'y'
+        use_digits = input("[ $ ] Include digits? (y/n) : ").lower() == 'y'
+        use_symbols = input("[ $ ] Include symbols? (y/n) : ").lower() == 'y'
+        count = int(input("[ $ ] How many passwords to generate? : "))
+        save_file = input("[ $ ] Save passwords to file? (y/n) : ").lower() == 'y'
+        if save_file:
+            filename = input("[ $ ] Enter filename (default: passwords.txt) : ")
+            if not filename:
+                filename = "passwords.txt"
+    except ValueError:
+        print(Fore.RED + "Invalid input! Please enter numbers correctly.")
+        sleep(1.5)
+        main()
+
+
+    generating_animation()
+
     passwords = []
 
     for i in range(count):
-        pwd = generate_password_custom(length, min_upper, min_lower, min_digits, min_symbols)
+        pwd = generate_password(length, use_upper, use_digits, use_symbols)
         passwords.append(pwd)
+        print(f"[{i+1}] Password: {pwd}")
+        print("Strength:", password_strength(pwd))
+        time.sleep(0.1)
 
-        # انیمیشن هر پسورد
-        animate_text(f"[{i+1}] Password: {Fore.CYAN}{pwd}", 0.01)
-        print(password_strength(pwd))
-
-        # Progress Bar کلی
-        show_progress_bar(i+1, count)
-        print("\n")
-
-        # کپی خودکار اولین پسورد
         if i == 0:
             pyperclip.copy(pwd)
             print(Fore.MAGENTA + "-> First password copied to clipboard!")
 
-    # ذخیره در فایل
     if save_file:
         with open(filename, 'w') as f:
             for pwd in passwords:
                 f.write(pwd + '\n')
-        print(Fore.GREEN + f"\n✅ Passwords saved to {filename}!")
+        print(Fore.GREEN + f"\nPasswords saved to {filename}!")
 
-    animate_text("\n🎉 All passwords generated successfully!", 0.03)
+    animate_text("All passwords generated successfully!", 0.02, border=True)
+    again = input(Fore.YELLOW + "\nDo you want to generate more passwords? (y/n) : ").strip().lower()
+    if again in ['n', 'no', 'exit', 'quit']:
+        animate_text("Thanks for using the Ultimate Password Generator! Stay secure! 🔐", delay=0.02, border=True)
+        sys.exit(0)
+    main()
 
 if __name__ == "__main__":
     main()
