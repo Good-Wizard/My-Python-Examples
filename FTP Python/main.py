@@ -32,8 +32,6 @@ logger.addHandler(handler)
 if platform.system().lower() != "windows":
     try:
         import readline
-
-        # history & autocomplete setup
     except ImportError:
         pass
 
