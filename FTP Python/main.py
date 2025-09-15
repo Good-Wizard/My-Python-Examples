@@ -1,9 +1,13 @@
-from ftplib import FTP, error_perm, all_errors
+from ftplib import FTP, FTP_TLS, error_perm, all_errors
 from functools import wraps
 from time import sleep
 import platform
 import os
 import sys
+import json
+
+
+PROFILE_FILE = ".ftp_profiles.json"
 
 
 def clear_screen():
@@ -11,44 +15,92 @@ def clear_screen():
     os.system("cls") if platform.system().lower() == "windows" else os.system("clear")
 
 
+def save_profile(host, username, use_tls):
+    """ذخیره پروفایل در فایل JSON (بدون پسورد)"""
+    profile = {"host": host, "username": username, "tls": use_tls}
+    try:
+        with open(PROFILE_FILE, "w", encoding="utf-8") as f:
+            json.dump(profile, f, indent=2)
+    except Exception:
+        pass
+
+
+def load_profile():
+    """خواندن پروفایل ذخیره‌شده"""
+    if os.path.exists(PROFILE_FILE):
+        try:
+            with open(PROFILE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return None
+    return None
+
+
 def get_login_data(func):
     """دکوراتور برای گرفتن اطلاعات ورود از کاربر"""
     @wraps(func)
     def wrapper(*args, **kwargs):
         clear_screen()
+
+        profile = load_profile()
+        if profile:
+            print(f"Last profile: host={profile['host']} user={profile['username']} TLS={profile['tls']}")
+            use_last = input("Use last profile? (y/N): ").strip().lower()
+            if use_last == "y":
+                username = profile["username"]
+                host = profile["host"]
+                use_tls = profile.get("tls", False)
+                password = input("Password: ").strip()
+                data = [username, password, host, use_tls]
+                return func(data, *args, **kwargs)
+
         username = input("Username: ").strip()
         password = input("Password: ").strip()
         host = input("Host: ").strip()
+        tls_input = input("Use FTPS? (y/N): ").strip().lower()
+        use_tls = tls_input == "y"
 
         if not username or not password or not host:
             print("\n[!] همه فیلدها الزامی هستند. دوباره تلاش کنید.")
             sleep(1)
             return wrapper(*args, **kwargs)
 
-        data = [username, password, host]
+        save_profile(host, username, use_tls)
+        data = [username, password, host, use_tls]
         return func(data, *args, **kwargs)
     return wrapper
 
 
 @get_login_data
 def login(data):
-    """اتصال به FTP سرور"""
+    """اتصال به FTP/FTPS سرور"""
     print("=" * 20, "\nConnecting...!", sep="")
     ftp = None
     try:
-        ftp = FTP(timeout=10)
+        use_tls = data[3]
+        ftp_class = FTP_TLS if use_tls else FTP
+
+        ftp = ftp_class(timeout=10)
         ftp.connect(host=data[2], port=21)
         ftp.login(user=data[0], passwd=data[1])
+
+        if use_tls:
+            ftp.prot_p()  # Protect data channel with TLS
+            print("[+] Secure FTPS connection established")
+
         print("\n[+] Connected successfully!")
         print(ftp.getwelcome())
         sleep(1)
 
-        handle_cmds(ftp, data[2])  # رفتن به حلقه دستورات
+        handle_cmds(ftp, data[2])  # حلقه دستورات
 
     except error_perm as e:
         print(f"\n[!] Permission error (username/password اشتباه؟): {e}")
     except (ConnectionRefusedError, TimeoutError) as e:
         print(f"\n[!] اتصال برقرار نشد: {e}")
+        retry = input("Retry? (y/N): ").strip().lower()
+        if retry == "y":
+            return login(data)
     except all_errors as e:
         print(f"\n[!] خطای عمومی FTP: {e}")
     except Exception as e:
