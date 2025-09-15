@@ -83,12 +83,18 @@ def handle_cmds(ftp, host):
             elif command == "help":
                 print("""
 Available commands:
-  ls              - List files in current directory
-  cd <dir>        - Change directory
-  pwd             - Show current directory
-  clear           - Clear the screen
-  help            - Show this help message
-  quit / exit     - Disconnect and quit
+  ls                   - List files in current directory
+  cd <dir>             - Change directory
+  pwd                  - Show current directory
+  clear                - Clear the screen
+  get <remote> [local] - Download a file
+  put <local> [remote] - Upload a file
+  delete <remote>      - Delete a file
+  mkdir <dir>          - Create directory
+  rmdir <dir>          - Remove directory
+  rename <old> <new>   - Rename a file or directory
+  help                 - Show this help message
+  quit / exit          - Disconnect and quit
                 """)
 
             elif command == "ls":
@@ -101,15 +107,79 @@ Available commands:
                 if len(args) != 1:
                     print("[!] Usage: cd <directory>")
                 else:
-                    try:
-                        ftp.cwd(args[0])
-                    except error_perm as e:
-                        print(f"[!] Permission error: {e}")
-                    except all_errors as e:
-                        print(f"[!] FTP error: {e}")
+                    ftp.cwd(args[0])
 
             elif command == "clear":
                 clear_screen()
+
+            elif command == "get":
+                if len(args) < 1:
+                    print("[!] Usage: get <remote> [local]")
+                else:
+                    remote_file = args[0]
+                    local_file = args[1] if len(args) > 1 else remote_file
+                    try:
+                        with open(local_file, "wb") as f:
+                            ftp.retrbinary(f"RETR {remote_file}", f.write)
+                        print(f"[+] Downloaded '{remote_file}' -> '{local_file}'")
+                    except all_errors as e:
+                        print(f"[!] FTP error: {e}")
+
+            elif command == "put":
+                if len(args) < 1:
+                    print("[!] Usage: put <local> [remote]")
+                else:
+                    local_file = args[0]
+                    remote_file = args[1] if len(args) > 1 else os.path.basename(local_file)
+                    if not os.path.exists(local_file):
+                        print(f"[!] Local file not found: {local_file}")
+                    else:
+                        try:
+                            with open(local_file, "rb") as f:
+                                ftp.storbinary(f"STOR {remote_file}", f)
+                            print(f"[+] Uploaded '{local_file}' -> '{remote_file}'")
+                        except all_errors as e:
+                            print(f"[!] FTP error: {e}")
+
+            elif command == "delete":
+                if len(args) != 1:
+                    print("[!] Usage: delete <remote>")
+                else:
+                    try:
+                        ftp.delete(args[0])
+                        print(f"[+] Deleted '{args[0]}'")
+                    except all_errors as e:
+                        print(f"[!] FTP error: {e}")
+
+            elif command == "mkdir":
+                if len(args) != 1:
+                    print("[!] Usage: mkdir <dir>")
+                else:
+                    try:
+                        ftp.mkd(args[0])
+                        print(f"[+] Directory created: {args[0]}")
+                    except all_errors as e:
+                        print(f"[!] FTP error: {e}")
+
+            elif command == "rmdir":
+                if len(args) != 1:
+                    print("[!] Usage: rmdir <dir>")
+                else:
+                    try:
+                        ftp.rmd(args[0])
+                        print(f"[+] Directory removed: {args[0]}")
+                    except all_errors as e:
+                        print(f"[!] FTP error: {e}")
+
+            elif command == "rename":
+                if len(args) != 2:
+                    print("[!] Usage: rename <old> <new>")
+                else:
+                    try:
+                        ftp.rename(args[0], args[1])
+                        print(f"[+] Renamed '{args[0]}' -> '{args[1]}'")
+                    except all_errors as e:
+                        print(f"[!] FTP error: {e}")
 
             else:
                 print(f"[!] Unknown command: {command}. Type 'help' for available commands.")
