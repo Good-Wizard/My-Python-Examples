@@ -24,11 +24,15 @@ Generates strong passwords with customizable options and visual feedback, perfec
 - `pip install colorama pyperclip`
 - `python main.py`
 
+---
+
 ## Usage 🖥
 Input your preferred password settings.
 Watch the animated progress and strength bars.
 Copy the first password automatically or save all passwords to a file.
 Repeat generation as many times as you like, until you choose to exit.
+
+---
 
 ## Why this generator? 💡
 Stylish CLI interface that’s more engaging than a typical generator
