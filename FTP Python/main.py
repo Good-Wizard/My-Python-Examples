@@ -6,6 +6,8 @@ import os
 import sys
 import json
 from colorama import init, Fore, Style
+import tqdm
+
 try:
     import readline  # Linux/macOS
 except ImportError:
@@ -189,11 +191,15 @@ Available commands:
                     remote_file = args[0]
                     local_file = args[1] if len(args) > 1 else remote_file
                     try:
-                        with open(local_file, "wb") as f:
-                            ftp.retrbinary(f"RETR {remote_file}", f.write)
-                        print(f"[+] Downloaded '{remote_file}' -> '{local_file}'")
+                        size = ftp.size(remote_file)
+                        with open(local_file, "wb") as f, tqdm(total=size, unit='B', unit_scale=True, desc=remote_file) as bar:
+                            def callback(data):
+                                f.write(data)
+                                bar.update(len(data))
+                            ftp.retrbinary(f"RETR {remote_file}", callback)
+                        print(Fore.GREEN + f"[+] Downloaded '{remote_file}' -> '{local_file}'")
                     except all_errors as e:
-                        print(f"[!] FTP error: {e}")
+                        print(Fore.RED + f"[!] FTP error: {e}")
 
             elif command == "put":
                 if len(args) < 1:
@@ -202,14 +208,18 @@ Available commands:
                     local_file = args[0]
                     remote_file = args[1] if len(args) > 1 else os.path.basename(local_file)
                     if not os.path.exists(local_file):
-                        print(f"[!] Local file not found: {local_file}")
+                        print(Fore.RED + f"[!] Local file not found: {local_file}")
                     else:
                         try:
-                            with open(local_file, "rb") as f:
-                                ftp.storbinary(f"STOR {remote_file}", f)
-                            print(f"[+] Uploaded '{local_file}' -> '{remote_file}'")
+                            size = os.path.getsize(local_file)
+                            with open(local_file, "rb") as f, tqdm(total=size, unit='B', unit_scale=True, desc=local_file) as bar:
+                                def callback(data):
+                                    bar.update(len(data))
+                                ftp.storbinary(f"STOR {remote_file}", f, 1024, callback)
+                            print(Fore.GREEN + f"[+] Uploaded '{local_file}' -> '{remote_file}'")
                         except all_errors as e:
-                            print(f"[!] FTP error: {e}")
+                            print(Fore.RED + f"[!] FTP error: {e}")
+
 
             elif command == "delete":
                 if len(args) != 1:
